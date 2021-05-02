@@ -1,6 +1,4 @@
-"""Requests adapter implementing a CURL backend"""
-
-import pycurl
+"""Requests adapter implementing a JSON-RPC protocol for LSP"""
 
 from requests.exceptions import RequestException, InvalidProxyURL
 from requests.utils import select_proxy, prepend_scheme_if_needed
@@ -19,8 +17,8 @@ from .error import translate_curl_exception
 from .request import CURLRequest
 
 
-class CURLAdapter(BaseAdapter):
-    """A requests adapter implemented using PyCURL"""
+class LSPAdapter(BaseAdapter):
+    """A requests adapter for JSON-RPC used in LSP"""
 
     def __init__(
         self,
@@ -29,7 +27,7 @@ class CURLAdapter(BaseAdapter):
         max_pool_size=DEFAULT_POOLSIZE,
         pool_block=DEFAULT_POOLBLOCK,
     ):
-        super(CURLAdapter, self).__init__()
+        super(LSPAdapter, self).__init__()
 
         self._initial_pool_size = initial_pool_size
         self._max_pool_size = max_pool_size

@@ -1,10 +1,11 @@
-# requests-curl
+# requests-lsp
 
-This package provides an adapter to use [PyCURL](http://pycurl.io) as backend for the [requests](http://docs.python-requests.org/en/master/) library.
+This package provides an adapter for debugging Language Server Protocol
+with [requests](http://docs.python-requests.org/en/master/).
 
-## Requirements
+The protocol is a JSON-RPC 2.0 with added `Content-Length` header.
 
-To be able to use this adapter, you need [PyCURL](http://pycurl.io), and, of course, [requests](http://docs.python-requests.org/en/master/).
+This is a fork of https://github.com/paivett/requests-curl by @paivett.
 
 ## Installation
 
@@ -20,17 +21,13 @@ Simply import the adapter and mount it
 
 ```python
 import requests
-
-from requests_curl.adapter import CURLAdapter
+from requests_lsp import LSPAdapter
 
 session = requests.Session()
+session.mount("lsp://", LSPAdapter())
 
-session.mount("http://", CURLAdapter())
-session.mount("https://", CURLAdapter())
-
-response = session.get("https://google.com")
-
-print(response.status_code)
+response = session.get("lsp://127.0.0.1:9084", json={"method": "initialize"})
+print(response)
 ```
 
 ## Running tests
@@ -43,7 +40,3 @@ Tests are implemented with pytest. To run tests, just do
 
  * 0.1
    * Initial release
-
-## Troubleshooting
-
-If you are having trouble installing PyCURL, check this: https://stackoverflow.com/a/51959349.
