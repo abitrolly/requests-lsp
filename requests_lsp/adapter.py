@@ -68,26 +68,28 @@ class LSPAdapter(BaseAdapter):
 
         conn.sendall(b'\r\n'.join(output))
 
+        # Parse response
         response = Response()
         response.request = request
 
         # [ ] if "id" is not specified, the read will hang
         #     so don't read if no "id" in initial JSON
 
-        with conn.makefile('rb') as fs:
-            # read Content-Length header
-            header = fs.readline()
-            if self.debug:
-                print('< ' + header.strip().decode('utf-8'))
-            line = fs.readline()
-            if self.debug:
-                print('< ' + line.strip().decode('utf-8'))
-            readlen = int(header.split()[1])
-            response.headers['Content-Length'] = readlen
-            body = fs.read(readlen)
-            if self.debug:
-                print('< ' + body.decode('utf-8'))
-            response._content = body
+        fs = conn.makefile('rb')
+        # read Content-Length header
+        header = fs.readline()
+        if self.debug:
+            print('< ' + header.strip().decode('utf-8'))
+        line = fs.readline()
+        if self.debug:
+            print('< ' + line.strip().decode('utf-8'))
+        readlen = int(header.split()[1])
+        response.headers['Content-Length'] = readlen
+        body = fs.read(readlen)
+        if self.debug:
+            print('< ' + body.decode('utf-8'))
+        response._content = body
+        fs.close()
 
         return response
 
