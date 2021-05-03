@@ -5,35 +5,6 @@ from requests.adapters import BaseAdapter
 from urllib3.util import parse_url, connection
 
 
-def debug_on():
-    # Turn on requests logging (which still doesn't log response body)
-    # https://docs.python-requests.org/en/master/api/#api-changes
-    import logging
-
-    # Enabling debugging at http.client level (requests->urllib3->http.client)
-    # you will see the REQUEST, including HEADERS and DATA, and RESPONSE with
-    # HEADERS but without DATA.
-    #
-    # The only thing missing will be the response.body which is not logged.
-    try:  # for Python 3
-        from http.client import HTTPConnection
-    except ImportError:
-        from httplib import HTTPConnection
-    HTTPConnection.debuglevel = 1
-
-    logging.basicConfig()  # initialize logging, otherwise you will not see anything from requests
-    logging.getLogger().setLevel(logging.DEBUG)
-    requests_log = logging.getLogger("urllib3")
-    requests_log.setLevel(logging.DEBUG)
-    requests_log.propagate = True
-
-    # Log request body manually
-    #
-    # import requests
-    # resp = requests.post('https://httpbin.org/post', json={"method": "initialize"})
-    # print(resp.text)
-
-
 class LSPAdapter(BaseAdapter):
     """
     A requests adapter for JSON-RPC used in LSP.
@@ -49,14 +20,10 @@ class LSPAdapter(BaseAdapter):
             debug (bool): if set, prints sent and received data.
         """
         super(LSPAdapter, self).__init__()
+        self.debug = debug
 
         # store connections as "host:port" -> connection
         self._connections = {}
-
-        if debug:
-            self.debug = True
-            # httplib is unused, but in case it somehow fires..
-            debug_on()
 
     def send(
         self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None
@@ -95,7 +62,6 @@ class LSPAdapter(BaseAdapter):
         # add body
         output.append(request.body)
 
-        self.debug = True
         if self.debug:
             for line in output:
                 print('> ' + line.decode('utf-8'))
@@ -104,6 +70,10 @@ class LSPAdapter(BaseAdapter):
 
         response = Response()
         response.request = request
+
+        # [ ] if "id" is not specified, the read will hang
+        #     so don't read if no "id" in initial JSON
+
         with conn.makefile('rb') as fs:
             # read Content-Length header
             header = fs.readline()

@@ -1,19 +1,20 @@
 # requests-lsp
 
-This package provides an adapter for debugging Language Server Protocol
+This package provides an adapter for debugging [Language Server Protocol]
+(https://microsoft.github.io/language-server-protocol/specifications/specification-current/#baseProtocol)
 with [requests](http://docs.python-requests.org/en/master/).
 
 The protocol is a JSON-RPC 2.0 with added `Content-Length` header.
 
-This is a fork of https://github.com/paivett/requests-curl by @paivett.
+This is a fork https://github.com/paivett/requests-curl by @paivett for a
+fast start, but uses raw sockets for communication insted of `PyCURL`.
 
 ## Installation
 
-Clone this project, and then, in the desired virtualenvironment, just run
+Examples may run well without installation, but just in case - clone this
+project and run
 
     python setup.py install
-
-[PyPI](https://pypi.org) integration comming soon.
 
 ## Usage
 
@@ -35,10 +36,17 @@ The example is in `sendfile.py` file in repository, tested with
 Solargraph Ruby LSP server. Use `runserver.sh` script with `podman`
 to run it in debug mode for experiments.
 
+On successful request you will see the server capabilities reply, and
+this output in Solargraph logs.
+```
+Solargraph is listening PORT=7658 PID=13
+[ANY] Solargraph initialized (2.6497000362724066e-05 seconds)
+```
+
 ## Running tests
 
-There are no LSP tests, only files left from `requests-curl`. Use `pytest` to
-run them, and ensure that they properly fail.
+There are no LSP tests for now. There were files from `requests-curl`, which
+uses `pytest` for testing.
 
     pytest tests/
 

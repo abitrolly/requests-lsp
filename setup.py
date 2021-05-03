@@ -4,7 +4,7 @@ setup(
     name='requests-lsp',
     version='0.1',
     packages=['requests-lsp'],
-    install_requires=['requests>=2.0.0', 'six>=1.11.0'],
+    install_requires=['requests>=2.0.0'],
     provides=['requests-lsp'],
     author='Anatoli Babenia',
     author_email='anatoli@rainforce.org',
