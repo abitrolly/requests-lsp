@@ -17,22 +17,28 @@ Clone this project, and then, in the desired virtualenvironment, just run
 
 ## Usage
 
-Simply import the adapter and mount it
+Import the adapter, mount it and use `requests.get` to send JSON to LSP
+server.
 
 ```python
 import requests
 from requests_lsp import LSPAdapter
 
-session = requests.Session()
-session.mount("lsp://", LSPAdapter())
+with requests.Session() as session:
+    session.mount("lsp://", LSPAdapter())
 
-response = session.get("lsp://127.0.0.1:9084", json={"method": "initialize"})
-print(response)
+    response = session.get("lsp://127.0.0.1:9084", json={"id": "1", "method": "initialize"})
+    print(response.json())
 ```
+
+The example is in `sendfile.py` file in repository, tested with
+Solargraph Ruby LSP server. Use `runserver.sh` script with `podman`
+to run it in debug mode for experiments.
 
 ## Running tests
 
-Tests are implemented with pytest. To run tests, just do
+There are no LSP tests, only files left from `requests-curl`. Use `pytest` to
+run them, and ensure that they properly fail.
 
     pytest tests/
 

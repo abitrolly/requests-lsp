@@ -1,177 +1,128 @@
 """Requests adapter implementing a JSON-RPC protocol for LSP"""
 
-from requests.exceptions import RequestException, InvalidProxyURL
-from requests.utils import select_proxy, prepend_scheme_if_needed
-from requests.adapters import (
-    BaseAdapter,
-    DEFAULT_RETRIES,
-    DEFAULT_POOLSIZE,
-    DEFAULT_POOLBLOCK,
-)
-from urllib3.util import parse_url
-from urllib3.util.retry import Retry
-from urllib3.exceptions import MaxRetryError
+from requests import Response
+from requests.adapters import BaseAdapter
+from urllib3.util import parse_url, connection
 
-from .pool import CURLHandlerPoolManager, CURLHandlerPool, ProxyCURLHandlerPool
-from .error import translate_curl_exception
-from .request import CURLRequest
+
+def debug_on():
+    # Turn on requests logging (which still doesn't log response body)
+    # https://docs.python-requests.org/en/master/api/#api-changes
+    import logging
+
+    # Enabling debugging at http.client level (requests->urllib3->http.client)
+    # you will see the REQUEST, including HEADERS and DATA, and RESPONSE with
+    # HEADERS but without DATA.
+    #
+    # The only thing missing will be the response.body which is not logged.
+    try:  # for Python 3
+        from http.client import HTTPConnection
+    except ImportError:
+        from httplib import HTTPConnection
+    HTTPConnection.debuglevel = 1
+
+    logging.basicConfig()  # initialize logging, otherwise you will not see anything from requests
+    logging.getLogger().setLevel(logging.DEBUG)
+    requests_log = logging.getLogger("urllib3")
+    requests_log.setLevel(logging.DEBUG)
+    requests_log.propagate = True
+
+    # Log request body manually
+    #
+    # import requests
+    # resp = requests.post('https://httpbin.org/post', json={"method": "initialize"})
+    # print(resp.text)
 
 
 class LSPAdapter(BaseAdapter):
-    """A requests adapter for JSON-RPC used in LSP"""
+    """
+    A requests adapter for JSON-RPC used in LSP.
 
-    def __init__(
-        self,
-        max_retries=DEFAULT_RETRIES,
-        initial_pool_size=DEFAULT_POOLSIZE,
-        max_pool_size=DEFAULT_POOLSIZE,
-        pool_block=DEFAULT_POOLBLOCK,
-    ):
+    Uses urllib3 helpers for connecting and parsing urls.
+    """
+
+    debug = False
+
+    def __init__(self, debug=False):
+        """
+        Args:
+            debug (bool): if set, prints sent and received data.
+        """
         super(LSPAdapter, self).__init__()
 
-        self._initial_pool_size = initial_pool_size
-        self._max_pool_size = max_pool_size
-        self._pool_block = pool_block
+        # store connections as "host:port" -> connection
+        self._connections = {}
 
-        if max_retries == DEFAULT_RETRIES:
-            self.max_retries = Retry(0, read=False)
-        else:
-            self.max_retries = Retry.from_int(max_retries)
-
-        self._pool_manager = CURLHandlerPoolManager(
-            max_pool_size=max_pool_size,
-            initial_pool_size=initial_pool_size,
-            pool_block=pool_block,
-            pool_constructor=CURLHandlerPool,
-        )
-
-        self._proxy_pool_managers = {}
+        if debug:
+            self.debug = True
+            # httplib is unused, but in case it somehow fires..
+            debug_on()
 
     def send(
         self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None
     ):
-        """Sends PreparedRequest object using PyCURL. Returns Response object.
+        """Sends PreparedRequest object. Returns Response object.
 
         Args:
             request (PreparedRequest): the request being sent.
-            stream (bool, optional): Defaults to False. Whether to stream the
-                request content.
-            timeout (float, optional): Defaults to None. How many seconds to
-                wait for the server to send data before giving up, as a float,
-                or a `(connect timeout, read timeout)` tuple.
-            verify (bool, optional): Defaults to True. Either a boolean, in
-                which case it controls whether we verify the server's TLS
-                certificate, or a string, in which case it must be a path
-                to a CA bundle to use.
-            cert (str, optional): Defaults to None. Any user-provided SSL
-                certificate to be trusted.
-            proxies (dict,  optional): Defaults to None. The proxies
-                dictionary to apply to the request.
-
-        Raises:
-            requests.exceptions.SSLError: if request failed due to a SSL error.
-            requests.exceptions.ProxyError: if request failed due to a proxy error.
-            requests.exceptions.ConnectTimeout: if request failed due to a connection timeout.
-            requests.exceptions.ReadTimeout: if request failed due to a read timeout.
-            requests.exceptions.ConnectionError: if there is a problem with the
-                connection (default error).
+            stream (bool, optional): unused
+            timeout (float, optional): unused
+            verify (bool, optional): unused
+            cert (str, optional): unused
+            proxies (dict,  optional): unused
 
         Returns:
             request.Response: the response to the request.
         """
-        retries = self.max_retries
 
-        try:
-            while not retries.is_exhausted():
-                try:
-                    response = self.curl_send(
-                        request,
-                        stream=stream,
-                        timeout=timeout,
-                        verify=verify,
-                        cert=cert,
-                        proxies=proxies,
-                    )
+        # https://docs.python-requests.org/en/master/api/#requests.PreparedRequest
 
-                    return response
+        # Connect to LSP server using raw socket
+        purl = parse_url(request.url)
+        hostport = purl.host + ':' + str(purl.port)
+        conn = self._connections.get(hostport, None)
+        if not conn:
+            conn = connection.create_connection([purl.host, purl.port])
+            self._connections[hostport] = conn
 
-                except RequestException as error:
-                    retries = retries.increment(
-                        method=request.method, url=request.url, error=error
-                    )
-                    retries.sleep()
+        # Calculate header block with Content-length
+        header = 'Content-Length: ' + str(len(request.body))
 
-        except MaxRetryError as retry_error:
-            raise retry_error.reason
+        output = []
+        # encode everything into bytes
+        output.append(header.encode())
+        output.append(b'')
+        # add body
+        output.append(request.body)
 
-    def curl_send(
-        self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None
-    ):
-        """Translates the `requests.PreparedRequest` into a CURLRequest, performs the request, and then
-        translates the repsonse to a `requests.Response`, and if there is any exception, it is also
-        translated into an appropiate `requests.exceptions.RequestException` subclass."""
-        try:
-            curl_connection = self.get_curl_connection(request.url, proxies)
-            curl_request = CURLRequest(
-                request, timeout=timeout, cert=cert, verify=verify
-            )
+        self.debug = True
+        if self.debug:
+            for line in output:
+                print('> ' + line.decode('utf-8'))
 
-            response = curl_connection.send(curl_request)
+        conn.sendall(b'\r\n'.join(output))
 
-            return response.to_requests_response()
+        response = Response()
+        response.request = request
+        with conn.makefile('rb') as fs:
+            # read Content-Length header
+            header = fs.readline()
+            if self.debug:
+                print('< ' + header.strip().decode('utf-8'))
+            line = fs.readline()
+            if self.debug:
+                print('< ' + line.strip().decode('utf-8'))
+            readlen = int(header.split()[1])
+            response.headers['Content-Length'] = readlen
+            body = fs.read(readlen)
+            if self.debug:
+                print('< ' + body.decode('utf-8'))
+            response._content = body
 
-        except pycurl.error as curl_error:
-            requests_exception = translate_curl_exception(curl_error)
-            raise requests_exception("CURL error {0}".format(curl_error.args))
-
-    def get_curl_connection(self, url, proxies=None):
-        """Returns a new CURL connection to handle the request to a given URL.
-
-        Args:
-            url (str): the URL of the request being sent.
-            proxies (dict, optional): A Requests-style dictionary of proxies used on this request.
-
-        Returns:
-            CURLConnectionPool: a connection pool that is capable of handling the given request.
-        """
-        proxy = select_proxy(url, proxies)
-
-        if proxy:
-            proxy = prepend_scheme_if_needed(proxy, "http")
-            proxy_url = parse_url(proxy)
-            if not proxy_url.host:
-                raise InvalidProxyURL(
-                    "Please check proxy URL. It is malformed"
-                    " and could be missing the host."
-                )
-            proxy_pool_manager = self.proxy_pool_manager_for(proxy_url)
-            pool = proxy_pool_manager.get_pool_from_url(url)
-        else:
-            pool = self._pool_manager.get_pool_from_url(url)
-
-        return pool
-
-    def proxy_pool_manager_for(self, proxy_url):
-        if str(proxy_url) in self._proxy_pool_managers:
-            pool_manager = self._proxy_pool_managers[str(proxy_url)]
-        else:
-
-            def pool_constructor(url, port, maxsize=1, **kwargs):
-                return ProxyCURLHandlerPool(
-                    proxy_url, url, port, maxsize=maxsize, **kwargs
-                )
-
-            pool_manager = CURLHandlerPoolManager(
-                max_pool_size=self._max_pool_size,
-                initial_pool_size=self._initial_pool_size,
-                pool_block=self._pool_block,
-                pool_constructor=pool_constructor,
-            )
-
-            self._proxy_pool_managers[str(proxy_url)] = pool_manager
-
-        return pool_manager
+        return response
 
     def close(self):
         """Cleans up adapter specific items."""
-        self._pool_manager.clear()
+        for _, conn in self._connections.items():
+            conn.close()
+        self._connections = {}
