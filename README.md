@@ -1,13 +1,14 @@
 # requests-lsp
 
-This package provides an adapter for debugging [Language Server Protocol]
-(https://microsoft.github.io/language-server-protocol/specifications/specification-current/#baseProtocol)
+This package provides an adapter for debugging
+[Language Server Protocol](https://microsoft.github.io/language-server-protocol/specifications/specification-current/#baseProtocol)
 with [requests](http://docs.python-requests.org/en/master/).
 
 The protocol is a JSON-RPC 2.0 with added `Content-Length` header.
 
-This is a fork https://github.com/paivett/requests-curl by @paivett for a
-fast start, but uses raw sockets for communication insted of `PyCURL`.
+The project is a fork of https://github.com/paivett/requests-curl by
+@paivett but since then it shares a litle with it, and uses raw sockets
+for communication insted of `PyCURL`.
 
 ## Installation
 

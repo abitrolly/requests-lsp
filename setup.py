@@ -3,9 +3,9 @@ from setuptools import setup
 setup(
     name='requests-lsp',
     version='0.1',
-    packages=['requests-lsp'],
+    packages=['requests_lsp'],
     install_requires=['requests>=2.0.0'],
-    provides=['requests-lsp'],
+    provides=['requests_lsp'],
     author='Anatoli Babenia',
     author_email='anatoli@rainforce.org',
     url='https://github.com/abitrolly/requests-lsp',
